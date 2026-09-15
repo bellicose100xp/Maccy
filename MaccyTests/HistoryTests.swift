@@ -67,8 +67,13 @@ class HistoryTests: XCTestCase { // swiftlint:disable:this type_body_length
       let first = historyItem("foo")
       weakDecorator = history.add(first)
       weakItem = first
+      // A different change count keeps the first item's session log entry
+      // alive. Restore it before the run loop spins below, or the clipboard
+      // poller sees a change and adds whatever the system clipboard holds.
+      let changeCount = Clipboard.shared.changeCount
       Clipboard.shared.changeCount += 1
       history.add(historyItem("foo"))
+      Clipboard.shared.changeCount = changeCount
       // The context holds the deleted item until the pending deletion is saved.
       try Storage.shared.context.save()
     }
