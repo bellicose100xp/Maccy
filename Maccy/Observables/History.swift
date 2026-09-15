@@ -103,8 +103,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
 
   @MainActor
   func load() async throws {
-    let descriptor = FetchDescriptor<HistoryItem>()
-    let results = try Storage.shared.context.fetch(descriptor)
+    let results = try Storage.shared.context.fetch(Storage.shared.historyItemsDescriptor)
     all = sorter.sort(results).map { HistoryItemDecorator($0) }
     items = all
 

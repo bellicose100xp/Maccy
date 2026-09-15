@@ -29,6 +29,22 @@ class HistoryTests: XCTestCase { // swiftlint:disable:this type_body_length
     XCTAssertEqual(history.items, [])
   }
 
+  func testLoading() async throws {
+    let foo = history.add(historyItem("foo"))
+    let bar = history.add(historyItem("bar"))
+    history.togglePin(bar)
+    let baz = history.add(historyItem("baz"))
+    try Storage.shared.context.save()
+
+    try await history.load()
+
+    XCTAssertEqual(history.all.map(\.item), Sorter().sort([foo, bar, baz].map(\.item)))
+    XCTAssertEqual(history.items, history.all)
+    XCTAssertEqual(history.all.map(\.pin), history.all.map(\.item.pin))
+    XCTAssertEqual(history.all.map(\.item.contents.count), [1, 1, 1])
+    XCTAssertEqual(history.all.map(\.title), history.all.map(\.item.title))
+  }
+
   func testAdding() {
     let first = history.add(historyItem("foo"))
     let second = history.add(historyItem("bar"))
