@@ -44,8 +44,16 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
   var previewImageGenerationTask: Task<(), Error>?
   var thumbnailImageGenerationTask: Task<(), Error>?
   var previewImage: NSImage?
+  // `item.previewableText` decodes file URLs, RTF or HTML on every call, so the
+  // result is kept until the item's title or contents change.
   var previewText: String {
-    item.previewableText
+    if let cachedPreviewText, cachedPreviewText.version == previewTextVersion {
+      return cachedPreviewText.text
+    }
+
+    let text = item.previewableText
+    cachedPreviewText = (previewTextVersion, text)
+    return text
   }
   var thumbnailImage: NSImage?
   var applicationImage: ApplicationImage
@@ -75,8 +83,19 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
   @ObservationIgnored
   private var cachedContentFingerprints: Set<Int>?
 
+  // Observed, unlike the cache itself, so whatever shows `previewText` re-reads
+  // it once the cache is invalidated.
+  private var previewTextVersion = 0
+  @ObservationIgnored
+  private var cachedPreviewText: (version: Int, text: String)?
+
   func contentsDidChange() {
     cachedContentFingerprints = nil
+    invalidatePreviewText()
+  }
+
+  private func invalidatePreviewText() {
+    previewTextVersion += 1
   }
 
   func hash(into hasher: inout Hasher) {
@@ -265,6 +284,7 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
       DispatchQueue.main.async {
         guard let self else { return }
         self.title = self.item.title
+        self.invalidatePreviewText()
         self.synchronizeItemTitle()
       }
     }

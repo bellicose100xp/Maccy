@@ -167,6 +167,37 @@ class HistoryItemDecoratorTests: XCTestCase {
     XCTAssertNil(weakItem)
   }
 
+  // Items without text fall back to their title, which OCR and the pins
+  // settings change after the fact.
+  func testPreviewTextFollowsTitleChanges() {
+    let itemDecorator = historyItemDecorator(nil)
+    XCTAssertEqual(itemDecorator.previewText, "")
+
+    itemDecorator.item.title = "renamed"
+    waitForMainQueue()
+    XCTAssertEqual(itemDecorator.previewText, "renamed")
+    XCTAssertEqual(itemDecorator.text, "renamed")
+  }
+
+  func testPreviewTextIsCachedUntilContentsChange() {
+    let itemDecorator = historyItemDecorator("foo")
+    XCTAssertEqual(itemDecorator.previewText, "foo")
+
+    itemDecorator.item.contents[0].value = "bar".data(using: .utf8)
+    XCTAssertEqual(itemDecorator.previewText, "foo")
+
+    itemDecorator.contentsDidChange()
+    XCTAssertEqual(itemDecorator.previewText, "bar")
+    XCTAssertEqual(itemDecorator.text, "bar")
+  }
+
+  func testTextIsShortenedPreviewText() {
+    let long = String(repeating: "a", count: 10_500)
+    let itemDecorator = historyItemDecorator(long)
+    XCTAssertEqual(itemDecorator.previewText, long)
+    XCTAssertEqual(itemDecorator.text, String(repeating: "a", count: 10_000))
+  }
+
   func testContentFingerprintsAreCachedUntilContentsChange() {
     let itemDecorator = historyItemDecorator("foo")
     let before = itemDecorator.contentFingerprints
