@@ -25,17 +25,8 @@ class Popup {
 
   // Radius used for items inset by the padding. Ensures they visually have the same curvature
   // as the menu.
-  static let cornerRadius: CGFloat = if #available(macOS 26.0, *) {
-    7
-  } else {
-    4
-  }
-
-  static let itemHeight: CGFloat = if #available(macOS 26.0, *) {
-    24
-  } else {
-    22
-  }
+  static let cornerRadius: CGFloat = 7
+  static let itemHeight: CGFloat = 24
 
   var needsResize = false
   var height: CGFloat = 0

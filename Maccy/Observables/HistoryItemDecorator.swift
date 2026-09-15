@@ -215,11 +215,16 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
     }
   }
 
+  // The onChange closures below are stored in the item's observation registrar
+  // and the decorator owns the item, so they must capture the decorator weakly.
+  // A strong capture forms a cycle that keeps every decorator ever created, and
+  // its item, alive for the lifetime of the process.
   private func synchronizeItemPin() {
     _ = withObservationTracking {
       item.pin
-    } onChange: {
+    } onChange: { [weak self] in
       DispatchQueue.main.async {
+        guard let self else { return }
         if let pin = self.item.pin {
           self.shortcuts = KeyShortcut.create(character: pin)
         }
@@ -231,8 +236,9 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
   private func synchronizeItemTitle() {
     _ = withObservationTracking {
       item.title
-    } onChange: {
+    } onChange: { [weak self] in
       DispatchQueue.main.async {
+        guard let self else { return }
         self.title = self.item.title
         self.synchronizeItemTitle()
       }

@@ -1,0 +1,74 @@
+#!/bin/sh
+# Cuts a release: bumps the version, builds Release, zips and signs the app,
+# adds an appcast entry, commits, tags, pushes, and publishes a GitHub release.
+# Installed copies then pick it up through Sparkle ("Check now" in settings).
+#
+#   ./release 2.7.2 "Fixed the memory leak that grew over days" "Another note"
+#
+# Each argument after the version becomes one bullet in the release notes.
+# Requires a clean git tree, `gh` logged in to the fork, and the Sparkle EdDSA
+# private key in the login keychain (the one whose public half is SUPublicEDKey
+# in Maccy/Info.plist; `generate_keys -p` prints it).
+set -e
+cd "$(dirname "$0")"
+
+VERSION=$1
+[ -n "$VERSION" ] || { echo "usage: ./release <version> [note ...]" >&2; exit 1; }
+shift
+[ -z "$(git status --porcelain)" ] || { echo "commit or stash your changes first" >&2; exit 1; }
+git rev-parse "$VERSION" >/dev/null 2>&1 && { echo "tag $VERSION already exists" >&2; exit 1; }
+
+REPO=bellicose100xp/Maccy
+SPARKLE_BIN=.build/SourcePackages/artifacts/sparkle/Sparkle/bin
+PBX=Maccy.xcodeproj/project.pbxproj
+
+# Version bump: marketing version from the argument, build number +1.
+BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION = ' "$PBX" | tr -dc '0-9')
+BUILD=$((BUILD + 1))
+sed -i '' -e "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $VERSION;/" -e "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $BUILD;/" "$PBX"
+
+CONFIG=Release ./build
+
+rm -rf dist && mkdir dist
+ditto -c -k --keepParent .build/Build/Products/Release/Maccy.app dist/Maccy.app.zip
+SIGNATURE=$("$SPARKLE_BIN/sign_update" dist/Maccy.app.zip)   # sparkle:edSignature="..." length="..."
+
+# Release notes: bullets for the appcast, markdown for GitHub.
+HTML_NOTES=""; MD_NOTES=""
+for note in "$@"; do
+  HTML_NOTES="$HTML_NOTES            <li>$note</li>
+"
+  MD_NOTES="$MD_NOTES- $note
+"
+done
+[ -n "$MD_NOTES" ] || MD_NOTES="Release $VERSION"
+
+ITEM="    <item>
+      <title>$VERSION</title>
+      <description>
+        <![CDATA[
+          <ul>
+$HTML_NOTES          </ul>
+        ]]>
+      </description>
+      <pubDate>$(date -u +'%a, %d %b %Y %H:%M:%S +0000')</pubDate>
+      <releaseNotesLink>https://github.com/$REPO/releases/tag/$VERSION</releaseNotesLink>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url=\"https://github.com/$REPO/releases/download/$VERSION/Maccy.app.zip\"
+        sparkle:version=\"$BUILD\"
+        sparkle:shortVersionString=\"$VERSION\"
+        $SIGNATURE
+        type=\"application/octet-stream\"
+      />
+    </item>"
+# Newest item goes right after <language>, so it is the first one Sparkle sees.
+ITEM="$ITEM" perl -0pi -e 's|(    <language>en</language>\n)|$1$ENV{ITEM}\n|' appcast.xml
+
+git add "$PBX" appcast.xml
+git commit -q -m "Release $VERSION"
+git tag "$VERSION"
+git push -q origin master "$VERSION"
+gh release create "$VERSION" dist/Maccy.app.zip --repo "$REPO" --title "$VERSION" --notes "$MD_NOTES"
+
+echo "released $VERSION (build $BUILD); appcast: https://raw.githubusercontent.com/$REPO/master/appcast.xml"

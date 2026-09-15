@@ -77,11 +77,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       }
     }
 
-    synchronizeMenuIconText()
     Task {
       for await value in Defaults.updates(.showRecentCopyInMenuBar) {
         if value {
           statusItem.button?.title = AppState.shared.menuIconText
+          synchronizeMenuIconText()
         } else {
           statusItem.button?.title = ""
         }
@@ -196,14 +196,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     panel.toggle(height: AppState.shared.popup.height, at: .statusItem)
   }
 
+  // Computing menuIconText touches every history item, so the observation is
+  // only kept alive while the menu bar text is shown. The tracking drops itself
+  // when the setting is turned off and is re-armed by the Defaults.updates loop
+  // above when it comes back on.
+  private var isTrackingMenuIconText = false
+
   private func synchronizeMenuIconText() {
+    guard Defaults[.showRecentCopyInMenuBar], !isTrackingMenuIconText else {
+      return
+    }
+
+    isTrackingMenuIconText = true
     _ = withObservationTracking {
       AppState.shared.menuIconText
     } onChange: {
       DispatchQueue.main.async {
-        if Defaults[.showRecentCopyInMenuBar] {
-          self.statusItem.button?.title = AppState.shared.menuIconText
+        self.isTrackingMenuIconText = false
+        guard Defaults[.showRecentCopyInMenuBar] else {
+          return
         }
+        self.statusItem.button?.title = AppState.shared.menuIconText
         self.synchronizeMenuIconText()
       }
     }

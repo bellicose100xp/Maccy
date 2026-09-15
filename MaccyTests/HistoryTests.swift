@@ -57,6 +57,35 @@ class HistoryTests: XCTestCase { // swiftlint:disable:this type_body_length
     try assertStorageCounts(items: 1, contents: 1)
   }
 
+  // A superseded duplicate is deleted from storage and must be released from memory
+  // too, including its entry in the session log that maps clipboard change counts.
+  func testAddingDuplicateReleasesSupersededItem() throws {
+    weak var weakDecorator: HistoryItemDecorator?
+    weak var weakItem: HistoryItem?
+
+    try autoreleasepool {
+      let first = historyItem("foo")
+      weakDecorator = history.add(first)
+      weakItem = first
+      Clipboard.shared.changeCount += 1
+      history.add(historyItem("foo"))
+      // The context holds the deleted item until the pending deletion is saved.
+      try Storage.shared.context.save()
+    }
+    // Deferred work scheduled during the add still holds the item for one turn.
+    drainMainQueue()
+
+    XCTAssertEqual(history.all.count, 1)
+    XCTAssertNil(weakDecorator)
+    XCTAssertNil(weakItem)
+  }
+
+  private func drainMainQueue() {
+    let drained = expectation(description: "main queue drained")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { drained.fulfill() }
+    wait(for: [drained], timeout: 2)
+  }
+
   func testAddingUnsavedDuplicate() throws {
     guard #available(macOS 15.0, *) else {
       throw XCTSkip("Incoming history items are inserted before add on macOS 14")

@@ -1,0 +1,30 @@
+#!/bin/sh
+# Builds the app.
+#
+#   ./build                  # Debug
+#   ./build test             # Debug, unit tests (MaccyTests) minus ClipboardTests
+#   ./build test all         # Debug, every test in the default plan
+#   CONFIG=Release ./build   # the build that gets installed
+#
+# The default test plan (Maccy.xctestplan) holds only MaccyTests, so neither this
+# script, plain `xcodebuild test`, nor Cmd+U in Xcode touches the UI tests. The
+# MaccyUITests target drives the real mouse and keyboard and blocks the machine
+# while it runs; it lives in its own opt-in plan:
+#   xcodebuild test -project Maccy.xcodeproj -scheme Maccy -testPlan MaccyUITests -destination platform=macOS
+#
+# ClipboardTests are skipped unless `all` is given: they write to the real system
+# clipboard while they run, and two of them read the frontmost app, so they fail
+# from a terminal on unmodified upstream code as well.
+set -e
+cd "$(dirname "$0")"
+
+COMMON="-project Maccy.xcodeproj -scheme Maccy -configuration ${CONFIG:-Debug} -derivedDataPath .build -destination platform=macOS"
+
+if [ "$1" = "test" ]; then
+    shift
+    SKIP="-skip-testing:MaccyTests/ClipboardTests"
+    if [ "$1" = "all" ]; then shift; SKIP=""; fi
+    exec xcodebuild test $COMMON $SKIP "$@"
+fi
+
+exec xcodebuild $COMMON "$@"

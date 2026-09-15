@@ -1,0 +1,43 @@
+#!/bin/sh
+# Builds Release and installs it to ~/Applications, replacing the running copy.
+#
+#   ./install
+#
+# Always install through this script. Launching straight out of .build leaves
+# that copy running alongside the installed one, which is how you end up with
+# two menu bar icons and two processes watching the clipboard.
+set -e
+cd "$(dirname "$0")"
+
+CONFIG=Release ./build
+
+DEST="$HOME/Applications/Maccy.app"
+SRC=".build/Build/Products/Release/Maccy.app"
+if [ ! -d "$SRC" ]; then echo "no Release build found at $SRC; did ./build fail?" >&2; exit 1; fi
+
+osascript -e 'quit app "Maccy"' 2>/dev/null || true
+waited=0
+while pgrep -x Maccy > /dev/null; do
+  sleep 0.5
+  waited=$((waited + 1))
+  if [ "$waited" -gt 40 ]; then
+    echo "Maccy did not quit after 20s; forcing" >&2
+    pkill -x Maccy || true
+    sleep 1
+    break
+  fi
+done
+
+rm -rf "$DEST"
+ditto "$SRC" "$DEST"
+open "$DEST"
+
+sleep 2
+running=$(pgrep -x Maccy | wc -l | tr -d ' ')
+if [ "$running" != "1" ]; then
+  echo "warning: $running Maccy processes running (expected 1)" >&2
+  ps -eo pid,comm | grep -i '[m]accy' >&2 || true
+fi
+
+codesign -dvvv "$DEST" 2>&1 | grep -E 'Identifier=|Authority=Apple Development|TeamIdentifier=' || true
+echo "installed $DEST"

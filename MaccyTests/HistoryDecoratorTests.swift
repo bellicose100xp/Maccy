@@ -120,6 +120,35 @@ class HistoryItemDecoratorTests: XCTestCase {
     XCTAssertFalse(itemDecorator.isPinned)
   }
 
+  func testKeepsFollowingItemChanges() {
+    let itemDecorator = historyItemDecorator("foo")
+    itemDecorator.item.pin = "k"
+    itemDecorator.item.title = "renamed"
+    waitForMainQueue()
+    XCTAssertEqual(itemDecorator.shortcuts.map(\.description), KeyShortcut.create(character: "k").map(\.description))
+    XCTAssertEqual(itemDecorator.title, "renamed")
+  }
+
+  // The decorator observes its item; the observation must not keep the decorator
+  // alive once nothing else references it, or every item ever copied leaks.
+  func testIsReleasedTogetherWithItsItem() throws {
+    weak var weakDecorator: HistoryItemDecorator?
+    weak var weakItem: HistoryItem?
+
+    try autoreleasepool {
+      let itemDecorator = historyItemDecorator("foo")
+      itemDecorator.item.pin = "k"
+      waitForMainQueue()
+      weakDecorator = itemDecorator
+      weakItem = itemDecorator.item
+      Storage.shared.context.delete(itemDecorator.item)
+      try Storage.shared.context.save()
+    }
+
+    XCTAssertNil(weakDecorator)
+    XCTAssertNil(weakItem)
+  }
+
   func testHighlight() {
     let itemDecorator = historyItemDecorator("foo bar baz")
     itemDecorator.highlight("random", [
@@ -217,6 +246,12 @@ class HistoryItemDecoratorTests: XCTestCase {
     item.numberOfCopies = 2
 
     return HistoryItemDecorator(item)
+  }
+
+  private func waitForMainQueue() {
+    let drained = expectation(description: "main queue drained")
+    DispatchQueue.main.async { drained.fulfill() }
+    wait(for: [drained], timeout: 1)
   }
 
   // swiftlint:disable:next identifier_name

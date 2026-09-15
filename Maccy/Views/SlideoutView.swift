@@ -59,11 +59,7 @@ where Content: View, Slideout: View {
           window.isMovableByWindowBackground = !inside
         }
         if inside {
-          if #available(macOS 15.0, *) {
-            NSCursor.columnResize.push()
-          } else {
-            NSCursor.resizeLeftRight.push()
-          }
+          NSCursor.columnResize.push()
         } else {
           NSCursor.pop()
         }

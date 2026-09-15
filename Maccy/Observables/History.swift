@@ -136,12 +136,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
   @discardableResult
   @MainActor
   func add(_ item: HistoryItem) -> HistoryItemDecorator {
-    if #available(macOS 15.0, *) {
-      try? History.shared.insertIntoStorage(item)
-    } else {
-      // On macOS 14 the history item needs to be inserted into storage directly after creating it.
-      // It was already inserted after creation in Clipboard.swift
-    }
+    try? History.shared.insertIntoStorage(item)
 
     var removedItemIndex: Int?
     if let existingHistoryItem = findSimilarItem(item) {
@@ -163,6 +158,12 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
       deleteFromStorage(existingHistoryItem)
       if let removedItemIndex {
         all.remove(at: removedItemIndex)
+      }
+      // The superseded item is gone from storage; point its session log entries
+      // at the replacement so later "modified" copies still resolve and the old
+      // object can be released.
+      for key in sessionLog.keys where sessionLog[key] == existingHistoryItem {
+        sessionLog[key] = item
       }
     } else {
       Task {
