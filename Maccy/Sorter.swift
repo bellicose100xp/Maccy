@@ -24,9 +24,19 @@ class Sorter {
   }
 
   func sort(_ items: [HistoryItem], by: By = Defaults[.sortBy]) -> [HistoryItem] {
+    return sort(items, by: by, item: { $0 }, pin: \.pin)
+  }
+
+  // Decorators mirror their item's pin, which spares a SwiftData read per comparison.
+  func sort(_ items: [HistoryItemDecorator], by: By = Defaults[.sortBy]) -> [HistoryItemDecorator] {
+    return sort(items, by: by, item: \.item, pin: \.pin)
+  }
+
+  private func sort<T>(_ items: [T], by: By, item: (T) -> HistoryItem, pin: (T) -> String?) -> [T] {
+    let pinTo = Defaults[.pinTo]
     return items
-      .sorted(by: { return bySortingAlgorithm($0, $1, by) })
-      .sorted(by: byPinned)
+      .sorted(by: { return bySortingAlgorithm(item($0), item($1), by) })
+      .sorted(by: { return byPinned(pin($0), pin($1), pinTo) })
   }
 
   private func bySortingAlgorithm(_ lhs: HistoryItem, _ rhs: HistoryItem, _ by: By) -> Bool {
@@ -40,11 +50,11 @@ class Sorter {
     }
   }
 
-  private func byPinned(_ lhs: HistoryItem, _ rhs: HistoryItem) -> Bool {
-    if Defaults[.pinTo] == .bottom {
-      return (lhs.pin == nil) && (rhs.pin != nil)
+  private func byPinned(_ lhs: String?, _ rhs: String?, _ pinTo: PinsPosition) -> Bool {
+    if pinTo == .bottom {
+      return (lhs == nil) && (rhs != nil)
     } else {
-      return (lhs.pin != nil) && (rhs.pin == nil)
+      return (lhs != nil) && (rhs == nil)
     }
   }
 }

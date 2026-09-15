@@ -52,6 +52,35 @@ class SorterTests: XCTestCase {
   }
 
   @MainActor
+  func testSortingDecoratorsMatchesSortingItems() {
+    item1.pin = "a"
+    item3.pin = "b"
+    let decorators = [item1, item2, item3].map { HistoryItemDecorator($0) }
+
+    for pinTo in PinsPosition.allCases {
+      Defaults[.pinTo] = pinTo
+      for by in Sorter.By.allCases {
+        XCTAssertEqual(
+          sorter.sort(decorators, by: by).map(\.item),
+          sorter.sort([item1, item2, item3], by: by),
+          "pinTo=\(pinTo) by=\(by)"
+        )
+      }
+    }
+  }
+
+  // The decorator sort reads the decorator's pin mirror, which `togglePin`
+  // keeps current without waiting for the item observation.
+  @MainActor
+  func testSortingDecoratorsUsesTogglePinRightAway() {
+    Defaults[.pinTo] = .top
+    let decorators = [item1, item2, item3].map { HistoryItemDecorator($0) }
+    decorators[1].togglePin()
+
+    XCTAssertEqual(sorter.sort(decorators, by: .lastCopiedAt), [decorators[1], decorators[0], decorators[2]])
+  }
+
+  @MainActor
   private func historyItem(
     value: String,
     firstCopiedAt: Int,

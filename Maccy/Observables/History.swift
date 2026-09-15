@@ -204,8 +204,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
   @MainActor
   private func insertionIndex(for itemDecorator: HistoryItemDecorator) -> Int {
     guard Defaults[.sortBy] == .lastCopiedAt else {
-      let sortedItems = sorter.sort(all.map(\.item) + [itemDecorator.item])
-      return sortedItems.firstIndex(of: itemDecorator.item) ?? all.count
+      return sorter.sort(all + [itemDecorator]).firstIndex(of: itemDecorator) ?? all.count
     }
 
     let lastCopiedAt = itemDecorator.item.lastCopiedAt
@@ -480,9 +479,9 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
 
     item.togglePin()
 
-    let sortedItems = sorter.sort(all.map(\.item))
+    let sortedItems = sorter.sort(all)
     if let currentIndex = all.firstIndex(of: item),
-       let newIndex = sortedItems.firstIndex(of: item.item) {
+       let newIndex = sortedItems.firstIndex(of: item) {
       all.remove(at: currentIndex)
       all.insert(item, at: newIndex)
     }
@@ -529,7 +528,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
 
   private func updateShortcuts() {
     for item in pinnedItems {
-      if let pin = item.item.pin {
+      if let pin = item.pin {
         item.shortcuts = KeyShortcut.create(character: pin)
       }
     }

@@ -110,6 +110,9 @@ class HistoryItemDecoratorTests: XCTestCase {
     itemDecorator.togglePin()
     XCTAssertNotNil(itemDecorator.item.pin)
     XCTAssertTrue(itemDecorator.isPinned)
+    XCTAssertFalse(itemDecorator.isUnpinned)
+    // The mirror has to be current before the item observation catches up.
+    XCTAssertEqual(itemDecorator.pin, itemDecorator.item.pin)
   }
 
   func testUnpin() {
@@ -117,7 +120,15 @@ class HistoryItemDecoratorTests: XCTestCase {
     itemDecorator.togglePin()
     itemDecorator.togglePin()
     XCTAssertNil(itemDecorator.item.pin)
+    XCTAssertNil(itemDecorator.pin)
     XCTAssertFalse(itemDecorator.isPinned)
+    XCTAssertTrue(itemDecorator.isUnpinned)
+  }
+
+  func testStartsWithItemPin() {
+    let itemDecorator = historyItemDecorator("foo", pin: "k")
+    XCTAssertEqual(itemDecorator.pin, "k")
+    XCTAssertTrue(itemDecorator.isPinned)
   }
 
   func testKeepsFollowingItemChanges() {
@@ -127,6 +138,13 @@ class HistoryItemDecoratorTests: XCTestCase {
     waitForMainQueue()
     XCTAssertEqual(itemDecorator.shortcuts.map(\.description), KeyShortcut.create(character: "k").map(\.description))
     XCTAssertEqual(itemDecorator.title, "renamed")
+    XCTAssertEqual(itemDecorator.pin, "k")
+    XCTAssertTrue(itemDecorator.isPinned)
+
+    itemDecorator.item.pin = nil
+    waitForMainQueue()
+    XCTAssertNil(itemDecorator.pin)
+    XCTAssertTrue(itemDecorator.isUnpinned)
   }
 
   // The decorator observes its item; the observation must not keep the decorator
@@ -178,7 +196,8 @@ class HistoryItemDecoratorTests: XCTestCase {
 
   private func historyItemDecorator(
     _ value: String?,
-    application: String? = "com.apple.finder"
+    application: String? = "com.apple.finder",
+    pin: String? = nil
   ) -> HistoryItemDecorator {
     let contents = [
       HistoryItemContent(
@@ -193,6 +212,7 @@ class HistoryItemDecoratorTests: XCTestCase {
     item.application = application
     item.firstCopiedAt = firstCopiedAt
     item.lastCopiedAt = lastCopiedAt
+    item.pin = pin
 
     return HistoryItemDecorator(item)
   }

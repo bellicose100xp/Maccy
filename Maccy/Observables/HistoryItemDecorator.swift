@@ -53,8 +53,12 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
   // 10k characters seems to be more than enough on large displays
   var text: String { previewText.shortened(to: 10_000) }
 
-  var isPinned: Bool { item.pin != nil }
-  var isUnpinned: Bool { item.pin == nil }
+  // Mirrors `item.pin` so that filtering and sorting the history does not go
+  // through SwiftData for every item. `togglePin` updates it right away; pins
+  // changed on the item elsewhere arrive through `synchronizeItemPin`.
+  private(set) var pin: String?
+  var isPinned: Bool { pin != nil }
+  var isUnpinned: Bool { pin == nil }
 
   // `History.findSimilarItem` checks this against every stored item on each
   // copy, so it is computed once and reset through `contentsDidChange`.
@@ -116,6 +120,7 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
     self.item = item
     self.shortcuts = shortcuts
     self.title = item.title
+    self.pin = item.pin
     self.applicationImage = ApplicationImageCache.shared.getImage(item: item)
 
     synchronizeItemPin()
@@ -229,9 +234,9 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
     if item.pin != nil {
       item.pin = nil
     } else {
-      let pin = HistoryItem.randomAvailablePin
-      item.pin = pin
+      item.pin = HistoryItem.randomAvailablePin
     }
+    pin = item.pin
   }
 
   // The onChange closures below are stored in the item's observation registrar
@@ -244,7 +249,8 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
     } onChange: { [weak self] in
       DispatchQueue.main.async {
         guard let self else { return }
-        if let pin = self.item.pin {
+        self.pin = self.item.pin
+        if let pin = self.pin {
           self.shortcuts = KeyShortcut.create(character: pin)
         }
         self.synchronizeItemPin()
