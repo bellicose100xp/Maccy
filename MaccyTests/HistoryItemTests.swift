@@ -133,6 +133,50 @@ class HistoryItemTests: XCTestCase {
     XCTAssertEqual(item.title, "")
   }
 
+  // The fingerprint subset check is a precondition of `supersedes`: whenever
+  // `supersedes` is true the fingerprints must agree, and for distinct data
+  // they must disagree so the full comparison can be skipped.
+  func testContentFingerprintsAgreeWithSupersedes() {
+    let string = NSPasteboard.PasteboardType.string.rawValue
+    let rtf = NSPasteboard.PasteboardType.rtf.rawValue
+    let modified = NSPasteboard.PasteboardType.modified.rawValue
+
+    let full = historyItem([(string, "one"), (rtf, "two")])
+    let textOnly = historyItem([(string, "one")])
+    let otherText = historyItem([(string, "two")])
+    let sameTypeOtherValue = historyItem([(string, "one"), (rtf, "three")])
+    let withTransient = historyItem([(string, "one"), (modified, "1")])
+    let otherTransient = historyItem([(string, "one"), (modified, "2")])
+    let empty = historyItem([])
+
+    let pairs = [
+      (full, textOnly), (textOnly, full), (full, otherText), (otherText, full),
+      (full, sameTypeOtherValue), (sameTypeOtherValue, full),
+      (withTransient, otherTransient), (otherTransient, withTransient),
+      (textOnly, withTransient), (withTransient, textOnly),
+      (full, empty), (empty, full), (full, full)
+    ]
+    for (lhs, rhs) in pairs {
+      let supersedes = lhs.supersedes(rhs)
+      let fingerprintsMatch = rhs.nonTransientContentFingerprints.isSubset(of: lhs.contentFingerprints)
+      XCTAssertEqual(supersedes, fingerprintsMatch, "\(lhs.contents.map(\.type)) vs \(rhs.contents.map(\.type))")
+    }
+
+    XCTAssertTrue(full.supersedes(textOnly))
+    XCTAssertFalse(textOnly.supersedes(full))
+    XCTAssertTrue(withTransient.supersedes(otherTransient))
+    XCTAssertTrue(full.supersedes(empty))
+    XCTAssertFalse(empty.supersedes(full))
+  }
+
+  func testContentFingerprintsFollowContentChanges() {
+    let item = historyItem("foo")
+    let before = item.contentFingerprints
+    item.contents[0].value = "bar".data(using: .utf8)
+    XCTAssertNotEqual(item.contentFingerprints, before)
+    XCTAssertEqual(item.contentFingerprints, historyItem("bar").contentFingerprints)
+  }
+
   func testSeveralItemsCanHaveEmptyPin() {
     let item1 = historyItem("foo")
     item1.pin = ""
@@ -153,6 +197,15 @@ class HistoryItemTests: XCTestCase {
     let item = HistoryItem()
     Storage.shared.context.insert(item)
     item.contents = contents
+    item.title = item.generateTitle()
+
+    return item
+  }
+
+  private func historyItem(_ contents: [(type: String, value: String)]) -> HistoryItem {
+    let item = HistoryItem()
+    Storage.shared.context.insert(item)
+    item.contents = contents.map { HistoryItemContent(type: $0.type, value: $0.value.data(using: .utf8)) }
     item.title = item.generateTitle()
 
     return item

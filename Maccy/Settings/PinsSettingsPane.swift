@@ -109,6 +109,7 @@ struct PinValueView: View {
         item.contents.append(newContent)
       }
     }
+    History.shared.contentsDidChange(item)
     // We don't automatically update title here since we want to preserve
     // OCR-extracted titles for images and other non-text content
   }

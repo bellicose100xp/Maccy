@@ -187,11 +187,7 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
       }
     } else {
       itemDecorator = HistoryItemDecorator(item)
-
-      let sortedItems = sorter.sort(all.map(\.item) + [item])
-      if let index = sortedItems.firstIndex(of: item) {
-        all.insert(itemDecorator, at: index)
-      }
+      all.insert(itemDecorator, at: insertionIndex(for: itemDecorator))
 
       items = all
       updateUnpinnedShortcuts()
@@ -199,6 +195,29 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
     }
 
     return itemDecorator
+  }
+
+  // The unpinned items in `all` are kept in sort order and a new unpinned item
+  // is almost always the most recently copied one, so with the default sort
+  // order it can slot in at the head of the unpinned items instead of
+  // re-sorting every SwiftData-backed item to find that position.
+  @MainActor
+  private func insertionIndex(for itemDecorator: HistoryItemDecorator) -> Int {
+    guard Defaults[.sortBy] == .lastCopiedAt else {
+      let sortedItems = sorter.sort(all.map(\.item) + [itemDecorator.item])
+      return sortedItems.firstIndex(of: itemDecorator.item) ?? all.count
+    }
+
+    let lastCopiedAt = itemDecorator.item.lastCopiedAt
+    var index = Defaults[.pinTo] == .top ? all.count : 0
+    for (currentIndex, existing) in all.enumerated() where existing.isUnpinned {
+      if existing.item.lastCopiedAt < lastCopiedAt {
+        return currentIndex
+      }
+      index = currentIndex + 1
+    }
+
+    return index
   }
 
   @MainActor
@@ -308,6 +327,14 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
     deleteContents(of: newItem)
     newItem.contents = existingItem.contents
     existingItem.contents = []
+    contentsDidChange(newItem)
+  }
+
+  // Decorators cache values derived from their item's contents, so every
+  // place that edits an item's contents has to report it here.
+  @MainActor
+  func contentsDidChange(_ item: HistoryItem) {
+    all.first { $0.item == item }?.contentsDidChange()
   }
 
   @MainActor
@@ -471,7 +498,10 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
 
   @MainActor
   private func findSimilarItem(_ item: HistoryItem) -> HistoryItem? {
-    if let duplicate = all.first(where: { $0.item != item && $0.item.supersedes(item) }) {
+    let fingerprints = item.nonTransientContentFingerprints
+    if let duplicate = all.first(where: {
+      $0.item != item && fingerprints.isSubset(of: $0.contentFingerprints) && $0.item.supersedes(item)
+    }) {
       return duplicate.item
     }
 
@@ -515,14 +545,11 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
 
   private func updateUnpinnedShortcuts() {
     let visibleUnpinnedItems = unpinnedItems.filter(\.isVisible)
-    for item in visibleUnpinnedItems {
-      item.shortcuts = []
-    }
-
-    var index = 1
-    for item in visibleUnpinnedItems.prefix(9) {
-      item.shortcuts = KeyShortcut.create(character: String(index))
-      index += 1
+    for (index, item) in visibleUnpinnedItems.enumerated() {
+      let shortcuts = index < 9 ? KeyShortcut.create(character: String(index + 1)) : []
+      if !item.shortcuts.elementsEqual(shortcuts, by: { $0.isEquivalent(to: $1) }) {
+        item.shortcuts = shortcuts
+      }
     }
   }
 }

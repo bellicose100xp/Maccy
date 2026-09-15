@@ -56,6 +56,25 @@ class HistoryItemDecorator: Identifiable, Hashable, HasVisibility {
   var isPinned: Bool { item.pin != nil }
   var isUnpinned: Bool { item.pin == nil }
 
+  // `History.findSimilarItem` checks this against every stored item on each
+  // copy, so it is computed once and reset through `contentsDidChange`.
+  var contentFingerprints: Set<Int> {
+    if let cachedContentFingerprints {
+      return cachedContentFingerprints
+    }
+
+    let fingerprints = item.contentFingerprints
+    cachedContentFingerprints = fingerprints
+    return fingerprints
+  }
+
+  @ObservationIgnored
+  private var cachedContentFingerprints: Set<Int>?
+
+  func contentsDidChange() {
+    cachedContentFingerprints = nil
+  }
+
   func hash(into hasher: inout Hasher) {
     // We need to hash title and attributedTitle, so SwiftUI knows it needs to update the view if they chage
     hasher.combine(id)

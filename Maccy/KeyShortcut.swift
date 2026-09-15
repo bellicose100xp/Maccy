@@ -28,6 +28,11 @@ struct KeyShortcut: Identifiable {
     return "\(modifierFlags.description)\(character.capitalized)"
   }
 
+  // `id` is unique per instance, so two shortcuts have to be compared by what they trigger on.
+  func isEquivalent(to other: KeyShortcut) -> Bool {
+    key == other.key && modifierFlags == other.modifierFlags
+  }
+
   func isVisible(_ all: [KeyShortcut], _ pressedModifierFlags: NSEvent.ModifierFlags) -> Bool {
     if all.count == 1 {
       return true

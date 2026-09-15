@@ -92,6 +92,25 @@ class HistoryItem {
       }
   }
 
+  // Equal contents always share a fingerprint, so an item can only supersede
+  // another one whose non-transient fingerprints are a subset of its own.
+  // Checking that first lets callers skip the data comparison in `supersedes`
+  // for items that cannot match.
+  var contentFingerprints: Set<Int> {
+    Set(contents.map(Self.fingerprint))
+  }
+
+  var nonTransientContentFingerprints: Set<Int> {
+    Set(contents.filter { !Self.transientTypes.contains($0.type) }.map(Self.fingerprint))
+  }
+
+  private static func fingerprint(_ content: HistoryItemContent) -> Int {
+    var hasher = Hasher()
+    hasher.combine(content.type)
+    hasher.combine(content.value)
+    return hasher.finalize()
+  }
+
   func generateTitle() -> String {
     guard image == nil else {
       Task {

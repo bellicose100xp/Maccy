@@ -149,6 +149,19 @@ class HistoryItemDecoratorTests: XCTestCase {
     XCTAssertNil(weakItem)
   }
 
+  func testContentFingerprintsAreCachedUntilContentsChange() {
+    let itemDecorator = historyItemDecorator("foo")
+    let before = itemDecorator.contentFingerprints
+    XCTAssertEqual(before, itemDecorator.item.contentFingerprints)
+
+    itemDecorator.item.contents[0].value = "bar".data(using: .utf8)
+    XCTAssertEqual(itemDecorator.contentFingerprints, before)
+
+    itemDecorator.contentsDidChange()
+    XCTAssertNotEqual(itemDecorator.contentFingerprints, before)
+    XCTAssertEqual(itemDecorator.contentFingerprints, itemDecorator.item.contentFingerprints)
+  }
+
   func testHighlight() {
     let itemDecorator = historyItemDecorator("foo bar baz")
     itemDecorator.highlight("random", [

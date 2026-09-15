@@ -117,6 +117,101 @@ class HistoryTests: XCTestCase { // swiftlint:disable:this type_body_length
     try assertStorageCounts(items: 1, contents: 1)
   }
 
+  // Edits made in the pins settings change an item's contents behind its
+  // decorator; the next copy of the edited text still has to be deduplicated.
+  func testAddingDuplicateOfEditedItem() throws {
+    let edited = history.add(historyItem("foo"))
+    edited.item.contents[0].value = "bar".data(using: .utf8)
+    history.contentsDidChange(edited.item)
+
+    let merged = history.add(historyItem("bar"))
+
+    XCTAssertEqual(history.all, [merged])
+    XCTAssertEqual(merged.item.numberOfCopies, 2)
+    try assertStorageCounts(items: 1, contents: 1)
+  }
+
+  func testAddingKeepsSorterOrderForLastCopiedAtWithPinsOnTop() {
+    Defaults[.sortBy] = .lastCopiedAt
+    Defaults[.pinTo] = .top
+    assertAddingKeepsSorterOrder()
+  }
+
+  func testAddingKeepsSorterOrderForLastCopiedAtWithPinsAtBottom() {
+    Defaults[.sortBy] = .lastCopiedAt
+    Defaults[.pinTo] = .bottom
+    assertAddingKeepsSorterOrder()
+  }
+
+  // Interleaves pinned and unpinned items, an item copied at the same instant
+  // as another and one with an older timestamp, checking after each add that
+  // the new item lands at the index a full sort of `all` plus the item gives.
+  private func assertAddingKeepsSorterOrder(file: StaticString = #filePath, line: UInt = #line) {
+    let sorter = Sorter()
+    let now = Date.now
+    func add(_ value: String, lastCopiedAt: TimeInterval, pinned: Bool = false) -> HistoryItemDecorator {
+      let item = historyItem(value)
+      item.lastCopiedAt = now.addingTimeInterval(lastCopiedAt)
+      var expected = history.all
+      let expectedIndex = sorter.sort(expected.map(\.item) + [item]).firstIndex(of: item)!
+      let decorator = history.add(item)
+      expected.insert(decorator, at: expectedIndex)
+      XCTAssertEqual(history.all, expected, "\(value) pinTo=\(Defaults[.pinTo])", file: file, line: line)
+      if pinned {
+        history.togglePin(decorator)
+      }
+      return decorator
+    }
+
+    XCTAssertTrue(history.all.isEmpty, file: file, line: line)
+    _ = add("first", lastCopiedAt: -50)
+    _ = add("pinned-1", lastCopiedAt: -45, pinned: true)
+    _ = add("second", lastCopiedAt: -40)
+    _ = add("pinned-2", lastCopiedAt: -35, pinned: true)
+    _ = add("third", lastCopiedAt: -30)
+    _ = add("same-instant", lastCopiedAt: -30)
+    _ = add("older", lastCopiedAt: -60)
+    let newest = add("newest", lastCopiedAt: -10)
+    XCTAssertEqual(history.unpinnedItems.first, newest, file: file, line: line)
+    XCTAssertEqual(history.pinnedItems.count, 2, file: file, line: line)
+    XCTAssertEqual(history.unpinnedItems.count, 6, file: file, line: line)
+
+    // Re-copying a pinned item keeps it at its old position rather than the one
+    // the sorter would give it. Later unpinned copies still have to land where
+    // they always did.
+    let readded = historyItem("pinned-1")
+    readded.lastCopiedAt = now.addingTimeInterval(-5)
+    XCTAssertTrue(history.add(readded).isPinned, file: file, line: line)
+    _ = add("after-readd", lastCopiedAt: -1)
+    _ = add("after-after-readd", lastCopiedAt: 0)
+    XCTAssertEqual(history.pinnedItems.count, 2, file: file, line: line)
+    XCTAssertEqual(history.unpinnedItems.count, 8, file: file, line: line)
+  }
+
+  func testUnpinnedShortcutsAreOnlyReassignedWhenChanged() {
+    var items: [HistoryItemDecorator] = []
+    for index in 0...9 {
+      items.append(history.add(historyItem(String(index))))
+    }
+    // Newest first: items[9] has shortcut 1, items[1] has shortcut 9, items[0] has none.
+    XCTAssertEqual(history.items.first, items[9])
+    XCTAssertEqual(items[0].shortcuts.count, 0)
+    let shortcutIds = items.map { $0.shortcuts.map(\.id) }
+
+    // Removing the item without a shortcut leaves every other shortcut untouched.
+    history.delete(items[0])
+    for index in 1...9 {
+      XCTAssertEqual(items[index].shortcuts.map(\.id), shortcutIds[index], "item \(index)")
+    }
+
+    // Removing the first item shifts every remaining shortcut.
+    history.delete(items[9])
+    for index in 1...8 {
+      XCTAssertNotEqual(items[index].shortcuts.map(\.id), shortcutIds[index], "item \(index)")
+      XCTAssertEqual(items[index].shortcuts.first?.key, KeyShortcut.create(character: String(9 - index)).first?.key)
+    }
+  }
+
   func testAddingItemThatIsSupersededByExisting() throws {
     let firstContents = [
       HistoryItemContent(
