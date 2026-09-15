@@ -1,9 +1,11 @@
 import Foundation
+import Logging
 import SwiftData
 
 @MainActor
 class Storage {
   static let shared = Storage()
+  let logger = Logger(label: "org.p0deje.Maccy")
 
   var container: ModelContainer
   var context: ModelContext { container.mainContext }
@@ -41,12 +43,15 @@ class Storage {
     }
   }
 
+  // Runs on every launch. It has to finish before `History.load()` starts,
+  // which holds as long as the caller stays on the main actor.
   func cleanupOrphanedContents() throws -> Int {
     let descriptor = FetchDescriptor<HistoryItemContent>(
       predicate: #Predicate { $0.item == nil }
     )
     let count = try context.fetchCount(descriptor)
     guard count > 0 else {
+      logger.info("No orphaned HistoryItemContent to remove")
       return 0
     }
 
@@ -56,6 +61,7 @@ class Storage {
     )
     context.processPendingChanges()
     try context.save()
+    logger.info("Removed \(count) orphaned HistoryItemContent")
 
     return count
   }

@@ -476,6 +476,28 @@ class HistoryTests: XCTestCase { // swiftlint:disable:this type_body_length
     try assertStorageCounts(items: 1, contents: 1)
   }
 
+  // Mirrors the launch sequence: the cleanup runs on the main actor, then the
+  // history loads what is left.
+  func testCleaningUpOrphanedContentsBeforeLoading() async throws {
+    let foo = history.add(historyItem("foo"))
+    let bar = history.add(historyItem("bar"))
+    for value in ["orphan-1", "orphan-2", "orphan-3"] {
+      Storage.shared.context.insert(HistoryItemContent(
+        type: NSPasteboard.PasteboardType.string.rawValue,
+        value: value.data(using: .utf8)
+      ))
+    }
+    try Storage.shared.context.save()
+    try assertStorageCounts(items: 2, contents: 5, orphaned: 3)
+
+    XCTAssertEqual(try Storage.shared.cleanupOrphanedContents(), 3)
+    try await history.load()
+
+    XCTAssertEqual(Set(history.all.map(\.item)), [foo.item, bar.item])
+    XCTAssertEqual(history.all.map(\.item.contents.count), [1, 1])
+    try assertStorageCounts(items: 2, contents: 2)
+  }
+
   private func assertStorageCounts(
     items: Int,
     contents: Int,

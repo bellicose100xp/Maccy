@@ -107,6 +107,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationDidFinishLaunching(_ aNotification: Notification) {
     migrateUserDefaults()
+    // Stays synchronous on the main actor so it is done before the content
+    // view below starts History.load().
+    _ = try? Storage.shared.cleanupOrphanedContents()
     disableUnusedGlobalHotkeys()
 
     panel = FloatingPanel(
@@ -158,10 +161,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         types.formUnion(StorageType.images.types)
       }
       Defaults[.enabledPasteboardTypes] = types
-    }
-
-    ensureMigration(key: "2026-08-12-cleanup-orphaned-history-item-contents") {
-      _ = try? Storage.shared.cleanupOrphanedContents()
     }
 
     ensureMigration(key: "2026-08-31-sanitize-history-item-titles") {
