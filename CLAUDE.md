@@ -34,9 +34,18 @@ and a separate defaults suite instead of the real history database.
 
 ## Releases and updates
 
-- `./release <version> "note" "note"` bumps the version, builds Release, zips and
+- Versions are derived from git by `./version`: `<latest upstream tag>.<fork
+  commits since it>` (for example `2.7.1.14`), build number = commit count.
+  Every `./build` stamps them, so About always names the running commit. The
+  `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` values in the project file are
+  fallbacks only; never bump them by hand.
+- `./release "note" "note"` builds Release with the next version, zips and
   EdDSA-signs the app, prepends an `appcast.xml` entry, commits, tags, pushes,
   and publishes a GitHub release on the fork.
+- Remote `upstream` is p0deje/Maccy. Fork-only work (Tahoe-only support,
+  personal features) stays on master. Anything meant for an upstream PR is
+  developed on a branch cut from `upstream/master` and merged into master, so
+  the PR carries only that change.
 - Installed copies update through Sparkle from
   `https://raw.githubusercontent.com/bellicose100xp/Maccy/master/appcast.xml`
   (`SUFeedURL` in `Maccy/Info.plist`); `SUPublicEDKey` there matches the Sparkle

@@ -1,0 +1,18 @@
+#!/bin/sh
+# Prints the fork's version and build number, derived from git.
+#
+#   ./version          # e.g. "2.7.1.14 1098"
+#   ./version --next   # the numbers the NEXT commit will have (used by ./release)
+#
+# Version: the latest upstream release tag reachable from HEAD (three components)
+# plus a fourth component counting this fork's commits since that tag. Rebasing on
+# a newer upstream release resets the counter. Build: total commits on the branch,
+# which only ever grows, so Sparkle always sees a release as newer than the last.
+set -e
+cd "$(dirname "$0")"
+
+BASE=$(git describe --tags --abbrev=0 --match '[0-9]*' --exclude '*.*.*.*')
+AHEAD=$(git rev-list --count "$BASE..HEAD")
+BUILD=$(git rev-list --count HEAD)
+if [ "$1" = "--next" ]; then AHEAD=$((AHEAD + 1)); BUILD=$((BUILD + 1)); fi
+echo "$BASE.$AHEAD $BUILD"

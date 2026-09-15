@@ -6,6 +6,9 @@
 #   ./build test all         # Debug, every test in the default plan
 #   CONFIG=Release ./build   # the build that gets installed
 #
+# Every build is stamped with the version and build number from ./version, so the
+# About window always says exactly which commit is running.
+#
 # The default test plan (Maccy.xctestplan) holds only MaccyTests, so neither this
 # script, plain `xcodebuild test`, nor Cmd+U in Xcode touches the UI tests. The
 # MaccyUITests target drives the real mouse and keyboard and blocks the machine
@@ -18,7 +21,15 @@
 set -e
 cd "$(dirname "$0")"
 
-COMMON="-project Maccy.xcodeproj -scheme Maccy -configuration ${CONFIG:-Debug} -derivedDataPath .build -destination platform=macOS"
+# Version and build number come from git (see ./version). RELEASE_VERSION and
+# RELEASE_BUILD override them; ./release sets those for the commit it is about to make.
+read -r VERSION BUILD <<EOV
+$(./version)
+EOV
+VERSION=${RELEASE_VERSION:-$VERSION}
+BUILD=${RELEASE_BUILD:-$BUILD}
+
+COMMON="-project Maccy.xcodeproj -scheme Maccy -configuration ${CONFIG:-Debug} -derivedDataPath .build -destination platform=macOS MARKETING_VERSION=$VERSION CURRENT_PROJECT_VERSION=$BUILD"
 
 if [ "$1" = "test" ]; then
     shift

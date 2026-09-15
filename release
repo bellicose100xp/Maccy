@@ -1,33 +1,30 @@
 #!/bin/sh
-# Cuts a release: bumps the version, builds Release, zips and signs the app,
-# adds an appcast entry, commits, tags, pushes, and publishes a GitHub release.
-# Installed copies then pick it up through Sparkle ("Check now" in settings).
+# Cuts a release: builds Release with the next version from ./version, zips and
+# signs the app, adds an appcast entry, commits, tags, pushes, and publishes a
+# GitHub release. Installed copies then pick it up through Sparkle ("Check now").
 #
-#   ./release 2.7.2 "Fixed the memory leak that grew over days" "Another note"
+#   ./release "Fixed the memory leak that grew over days" "Another note"
 #
-# Each argument after the version becomes one bullet in the release notes.
+# Each argument becomes one bullet in the release notes. The version is not an
+# argument: it is <upstream tag>.<fork commits since it>, see ./version.
 # Requires a clean git tree, `gh` logged in to the fork, and the Sparkle EdDSA
 # private key in the login keychain (the one whose public half is SUPublicEDKey
 # in Maccy/Info.plist; `generate_keys -p` prints it).
 set -e
 cd "$(dirname "$0")"
 
-VERSION=$1
-[ -n "$VERSION" ] || { echo "usage: ./release <version> [note ...]" >&2; exit 1; }
-shift
 [ -z "$(git status --porcelain)" ] || { echo "commit or stash your changes first" >&2; exit 1; }
-git rev-parse "$VERSION" >/dev/null 2>&1 && { echo "tag $VERSION already exists" >&2; exit 1; }
 
 REPO=bellicose100xp/Maccy
 SPARKLE_BIN=.build/SourcePackages/artifacts/sparkle/Sparkle/bin
-PBX=Maccy.xcodeproj/project.pbxproj
 
-# Version bump: marketing version from the argument, build number +1.
-BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION = ' "$PBX" | tr -dc '0-9')
-BUILD=$((BUILD + 1))
-sed -i '' -e "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $VERSION;/" -e "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $BUILD;/" "$PBX"
+# The release commit below adds one commit, so build with the numbers it will have.
+read -r VERSION BUILD <<EOV
+$(./version --next)
+EOV
+git rev-parse "$VERSION" >/dev/null 2>&1 && { echo "tag $VERSION already exists" >&2; exit 1; }
 
-CONFIG=Release ./build
+RELEASE_VERSION=$VERSION RELEASE_BUILD=$BUILD CONFIG=Release ./build
 
 rm -rf dist && mkdir dist
 ditto -c -k --keepParent .build/Build/Products/Release/Maccy.app dist/Maccy.app.zip
@@ -65,7 +62,7 @@ $HTML_NOTES          </ul>
 # Newest item goes right after <language>, so it is the first one Sparkle sees.
 ITEM="$ITEM" perl -0pi -e 's|(    <language>en</language>\n)|$1$ENV{ITEM}\n|' appcast.xml
 
-git add "$PBX" appcast.xml
+git add appcast.xml
 git commit -q -m "Release $VERSION"
 git tag "$VERSION"
 git push -q origin master "$VERSION"
