@@ -19,8 +19,8 @@ class Storage {
 
   private let url = URL.applicationSupportDirectory.appending(path: "Maccy/Storage.sqlite")
 
-  // Everything that fetches history items goes on to read their contents, so
-  // prefetching the relationship replaces one fault per item with one fetch.
+  // Loading the history reads every item's contents right away, so prefetching
+  // the relationship replaces one fault per item with one fetch.
   var historyItemsDescriptor: FetchDescriptor<HistoryItem> {
     var descriptor = FetchDescriptor<HistoryItem>()
     descriptor.relationshipKeyPathsForPrefetching = [\.contents]
@@ -51,7 +51,6 @@ class Storage {
     )
     let count = try context.fetchCount(descriptor)
     guard count > 0 else {
-      logger.info("No orphaned HistoryItemContent to remove")
       return 0
     }
 
@@ -72,7 +71,7 @@ class Storage {
   // store has to be healed before the history is first rendered.
   // See https://github.com/p0deje/Maccy/issues/1520.
   func sanitizeTitles() throws -> Int {
-    let items = try context.fetch(historyItemsDescriptor)
+    let items = try context.fetch(FetchDescriptor<HistoryItem>())
     var count = 0
 
     for item in items where item.title.containsScalarsUnsafeForTitleLayout {

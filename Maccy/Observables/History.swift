@@ -325,11 +325,10 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
     deleteContents(of: newItem)
     newItem.contents = existingItem.contents
     existingItem.contents = []
-    contentsDidChange(newItem)
   }
 
-  // Decorators cache values derived from their item's contents, so every
-  // place that edits an item's contents has to report it here.
+  // Decorators cache values derived from their item's contents, so any edit to
+  // an item that already has a decorator has to report it here.
   @MainActor
   func contentsDidChange(_ item: HistoryItem) {
     all.first { $0.item == item }?.contentsDidChange()
